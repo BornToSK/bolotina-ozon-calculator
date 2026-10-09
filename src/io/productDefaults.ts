@@ -1,0 +1,5 @@
+import type {BusinessSettings,ProductInput} from '../calculation/types';
+export const defaultSettings:BusinessSettings={targetMargin:23,maxDrr:15,yellowMargin:15};
+export function newProduct(sku:string):ProductInput {
+ return {sku,name:'',category:'',fulfillment:'FBS',shipmentScheme:'Схема 1',sellerPrice:0,discountPercent:0,coinvestPercent:0,costPrice:0,extraPackagingCost:0,extraPackagingPercent:100,returnPackagingTariff:0,returnPackagingPercent:0,commissionPercent:0,autoCommission:false,volumeLiters:1,volumeBand:'0,801-1 л',buyoutPercent:100,drrPercent:0,acquiringPercent:1.5,pvzPercent:.7,taxSystem:'usn_income',taxRatePercent:6,vatPercent:0,legalForm:'IP',inputVatCost:0,inputVatMonthly:0,undocumentedUnit:0,fixedContributionsYear:0,monthlySales:null,salesSharePercent:0,monthlyIndirectExpenses:0,monthlySkuExpenses:0,stockUnits:null,leadTimeWeeks:0,crossDockEnabled:false,crossDockTariff:0,insuranceEnabled:false,freeFboIntake:true,fbsPoint:'sc',fbsSpeed:'24_36h',originCluster:'Москва, МО и Дальние регионы',returnsToOzon:true,deferralDays:0,otherUnitExpenses:0,fboClusters:['Москва, МО и Дальние регионы']};
+}

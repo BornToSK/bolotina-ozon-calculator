@@ -1,0 +1,19 @@
+{
+  "globals": {
+    "acq": "1.5",
+    "delivpvz": "0.7",
+    "taxrate": "12",
+    "profiles": [
+      {
+        "fbsPoint": "sc",
+        "fbsOrigin": "Москва, МО и Дальние регионы",
+        "fbsSpeed": "48h",
+        "returnsToOzon": true,
+        "gruzim": [
+          "Москва, МО и Дальние регионы"
+        ]
+      }
+    ]
+  },
+  "rows": []
+}
