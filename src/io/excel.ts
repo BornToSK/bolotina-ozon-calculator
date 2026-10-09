@@ -54,7 +54,8 @@ export function parseWorkbook(w:XLSX.WorkBook,customMapping:Record<string,string
     const g=legacy.globals,ref=(legacy.rows as Record<string,string>[]).find(r=>r.name===sku),profile=g.profiles[Number(ref?.['in-profile']??0)];
     p.taxRatePercent=Number(g.taxrate);p.acquiringPercent=Number(g.acq);p.pvzPercent=Number(g.delivpvz);
     p.fbsPoint=profile.fbsPoint;p.fbsSpeed=profile.fbsSpeed;p.originCluster=profile.fbsOrigin;p.returnsToOzon=profile.returnsToOzon;p.fboClusters=profile.gruzim;
-    p.returnPackagingTariff=Number(ref?.['in-retpack-type']??0);p.returnPackagingPercent=Number(ref?.['in-retpack']??0);p.freeFboIntake=ref?.['in-freeintake']==='yes';
+    // ASSUMPTION: legacy text omits return packaging; shared saved-reference defaults are 25 RUB / 25%.
+    p.returnPackagingTariff=Number(ref?.['in-retpack-type']??25);p.returnPackagingPercent=Number(ref?.['in-retpack']??25);p.freeFboIntake=ref?.['in-freeintake']==='yes';
     p.leadTimeWeeks=Number(ref?.['in-leadtime']??0);p.stockUnits=Number(ref?.['in-stock']??0)||null;
    } else if(sheetName!=='Юнит-экономика')out.warnings.push(`${sku}: подробных параметров нет; проверьте настройки`);
    if(p.monthlySales===0)p.monthlySales=null;
