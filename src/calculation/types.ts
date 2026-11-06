@@ -13,6 +13,7 @@ export interface ProductInput {
 }
 export interface BusinessSettings {targetMargin:number; maxDrr:number; yellowMargin:number}
 export interface Tariff {
+ observedFbs?:{origin:string;returnsToOzon:boolean;minimumExclusive:number;bands:Record<string,{forward:number;reverse:number}>};
  version:string; effectiveFrom:string; effectiveTo:string|null; source:string; status:string;
  volumes:string[]; origins:string[]; destinations:string[]; routes:(number|null)[][][]; lowPriceRoutes:(number|null)[][][];
  fallback:number[]; lowPriceFallback:number[]; nearest:number[][]; shares:Record<string,number>;

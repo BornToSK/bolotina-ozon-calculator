@@ -10,5 +10,6 @@ export function validateTariff(value:unknown):Tariff {
  if(Object.values(t.shares).some(n=>n<0)||Object.values(t.shares).reduce((s,n)=>s+n,0)<=0)throw Error('Доли кластеров должны быть положительными');
  for(const v of [t.FBO,t.commissions,t.returns,t.insurance,t.additionalFees,t.logisticsCoefficients])for(const n of Object.values(v))if(typeof n==='number'&&(!Number.isFinite(n)||n<0))throw Error('Отрицательный или неверный тариф');
  if(t.fallback?.length!==t.volumes.length||t.lowPriceFallback?.length!==t.volumes.length||[...t.fallback,...t.lowPriceFallback].some(n=>!Number.isFinite(n)||n<0))throw Error('Неверные резервные тарифы');
+ if(t.observedFbs){const o=t.observedFbs;if(!t.origins.includes(o.origin)||typeof o.returnsToOzon!=='boolean'||!Number.isFinite(o.minimumExclusive)||o.minimumExclusive<0||!o.bands||!Object.keys(o.bands).length||Object.entries(o.bands).some(([band,r])=>!t.volumes.includes(band)||!r||![r.forward,r.reverse].every(n=>Number.isFinite(n)&&n>=0)))throw Error('Неверные ставки логистики из выгрузки');}
  return t;
 }

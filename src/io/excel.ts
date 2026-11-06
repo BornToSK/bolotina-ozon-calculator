@@ -82,5 +82,5 @@ export function buildExport(products:ProductInput[],results:Result[],settings:Bu
  add('Сценарии',products.flatMap(p=>compareScenarios(p,tariff).map(r=>({sku:p.sku,scenario:r.name,profit:r.profit,margin:r.margin,roi:r.roi,monthlyProfit:r.monthlyProfit,profitDelta:r.profitDelta,marginDelta:r.marginDelta,roiDelta:r.roiDelta,monthlyDelta:r.monthlyDelta}))));
  return wb;
 }
-export function exportExcel(products:ProductInput[],results:Result[],settings:BusinessSettings,tariff:Tariff=defaultTariff){XLSX.writeFile(buildExport(products,results,settings,tariff),'Болотина-юнит-экономика.xlsx');}
+export function exportExcel(products:ProductInput[],results:Result[],settings:BusinessSettings,tariff:Tariff=defaultTariff,shopName='Болотина'){XLSX.writeFile(buildExport(products,results,settings,tariff),`${shopName}-юнит-экономика.xlsx`);}
 

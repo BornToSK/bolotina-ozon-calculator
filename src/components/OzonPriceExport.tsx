@@ -4,7 +4,7 @@ import type {ProductInput,Tariff} from '../calculation/types';
 import {detectPriceTemplate,downloadPriceTemplate,priceItems,priceList,previewPriceTemplate,templateColumns,type TemplateMapping} from '../io/ozonPrices';
 import {rub} from '../ui';
 
-export default function OzonPriceExport({products,visibleSkus,selected,tariff,close}:{products:ProductInput[];visibleSkus:string[];selected:Set<string>;tariff:Tariff;close:()=>void}){
+export default function OzonPriceExport({products,visibleSkus,selected,tariff,close,shopName}:{shopName:string;products:ProductInput[];visibleSkus:string[];selected:Set<string>;tariff:Tariff;close:()=>void}){
  const loadVersion=useRef(0);
  const [original,setOriginal]=useState<Uint8Array|null>(null);
  const [scope,setScope]=useState(selected.size?'selected':'all'),[workbook,setWorkbook]=useState<XLSX.WorkBook|null>(null),[mapping,setMapping]=useState<TemplateMapping|null>(null),[filename,setFilename]=useState(''),[error,setError]=useState('');
@@ -39,7 +39,7 @@ export default function OzonPriceExport({products,visibleSkus,selected,tariff,cl
  {preview&&<><p>Будет обновлено: <b>{preview.changes.length}</b>. Других строк без изменения: {preview.untouched}.</p>{preview.errors.map((e,i)=><div className="notice error" key={i}>{e}</div>)}{preview.missing.length>0&&<div className="notice error">Нет в шаблоне ({preview.missing.length}): {preview.missing.join(', ')}. Выберите нужные SKU или скачайте шаблон со всеми товарами.</div>}</>}
  <div className="price-preview"><table className="compact"><thead><tr><th>Артикул</th>{preview&&<th>Цена в шаблоне</th>}<th>Новая цена продавца</th></tr></thead><tbody>{(preview?preview.changes:computed.items).slice(0,10).map(p=><tr key={p.sku}><td>{p.sku}</td>{preview&&<td>{'previous' in p?String(p.previous??'—'):'—'}</td>}<td>{rub(p.price)}</td></tr>)}</tbody></table></div>
  <p className="muted">В шаблоне Ozon заполняется «Новая предельная цена без акций» (BD). Текущие значения и служебная структура файла сохраняются: проверьте их ограничения перед загрузкой. Приём файла кабинетом зависит от актуального шаблона Ozon.</p>
- <footer><button disabled={!computed.items.length||!!computed.error} onClick={()=>{try{XLSX.writeFile(priceList(computed.items),'Болотина-список-цен.xlsx');}catch(e){setError(String(e));}}}>Скачать список цен</button><button className="primary" disabled={!preview||!!computed.error||!computed.items.length||!!preview.errors.length||!!preview.missing.length} onClick={download}>Скачать заполненный шаблон Ozon</button></footer>
+ <footer><button disabled={!computed.items.length||!!computed.error} onClick={()=>{try{XLSX.writeFile(priceList(computed.items),`${shopName}-список-цен.xlsx`);}catch(e){setError(String(e));}}}>Скачать список цен</button><button className="primary" disabled={!preview||!!computed.error||!computed.items.length||!!preview.errors.length||!!preview.missing.length} onClick={download}>Скачать заполненный шаблон Ozon</button></footer>
  <small className="muted">«Список цен» — два столбца для переноса; для загрузки в кабинет используйте заполненный шаблон Ozon.</small>
  </section></div>;
 }

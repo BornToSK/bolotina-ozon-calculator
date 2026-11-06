@@ -6,9 +6,12 @@ export function logistics(p:ProductInput,price:number,t:Tariff){
  const rate=(o:number,d:number)=>price<=300?(t.lowPriceRoutes[vi]?.[o]?.[d]??t.lowPriceFallback[vi]):(t.routes[vi]?.[o]?.[d]??t.fallback[vi]);
  const origin=t.origins.indexOf(p.originCluster); if(origin<0)throw Error('Неизвестный кластер отгрузки');
  let f=0,r=0,sum=0;
+ const observed=t.observedFbs;
+ const quote=observed&&price>observed.minimumExclusive&&p.fulfillment==='FBS'&&p.originCluster===observed.origin&&p.returnsToOzon===observed.returnsToOzon?observed.bands[t.volumes[vi]]:undefined;
  const stocked=new Set(p.fboClusters.map(c=>t.origins.indexOf(c)));
  if(p.fulfillment==='FBO'&&(!stocked.size||stocked.has(-1)))throw Error('Выберите известные склады FBO');
- for(const [dest,share] of Object.entries(t.shares)){
+ if(quote){f=quote.forward;r=quote.reverse;sum=1;}
+ else for(const [dest,share] of Object.entries(t.shares)){
   if(share<=0)continue; const di=t.destinations.indexOf(dest);if(di<0)throw Error('Неизвестный кластер покупателя: '+dest);
   const local=t.origins.indexOf(dest);
   const source=p.fulfillment==='FBS'?origin:stocked.has(local)?local:(t.nearest[di]??[]).find(o=>stocked.has(o));
@@ -24,5 +27,5 @@ export function logistics(p:ProductInput,price:number,t:Tariff){
  const pvz=Math.min(price*p.pvzPercent/100,t.additionalFees.pvzCap)/b;
  if(p.fulfillment==='FBS'&&!(p.fbsPoint in t.FBS.intake))throw Error('Неизвестная точка сдачи FBS');
  const intake=p.fulfillment==='FBS'?t.FBS.intake[p.fbsPoint]/b:p.freeFboIntake?0:Math.min(t.FBO.intakeCap,t.FBO.intakeBase+Math.max(0,Math.ceil(upperVolume(t.volumes[vi]))-1)*t.FBO.intakePerLiter);
- return {forward,reverse,processing,returnPackaging,pvz,intake,total:forward+reverse+processing+returnPackaging+pvz};
+ return {forward,reverse,processing,returnPackaging,pvz,intake,quoted:!!quote,total:forward+reverse+processing+returnPackaging+pvz};
 }

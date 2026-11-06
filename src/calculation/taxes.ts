@@ -1,6 +1,6 @@
 import type {ProductInput} from './types';
-export function taxes(p:ProductInput,price:number,buyer:number,marketplace:number,vatServices:number,expenses:number){
- const premium=Math.max(0,price-buyer-marketplace),revenue=buyer+premium;
+export function taxes(p:ProductInput,price:number,buyer:number,marketplace:number,vatServices:number,expenses:number,coinvestCoverage=marketplace){
+ const premium=Math.max(0,price-buyer-coinvestCoverage),revenue=buyer+premium;
  const outputVat=revenue*p.vatPercent/(100+p.vatPercent);
  const deductible=p.vatPercent>0&&p.vatPercent!==5&&p.vatPercent!==7;
  const inputVat=deductible?Math.max(0,vatServices-(price-buyer))*22/122+p.inputVatCost+(p.monthlySales&&p.monthlySales>0?p.inputVatMonthly/p.monthlySales:0):0;

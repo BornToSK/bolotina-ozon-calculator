@@ -17,12 +17,14 @@ export function calculate(p:ProductInput,t:Tariff=defaultTariff):Result {
  const skuExpenses=p.monthlySales&&p.monthlySales>0?p.monthlySkuExpenses/p.monthlySales:0;
  const marketplace=comm+acquiring+l.total+l.intake+ads.buyout+crossDock;
  const expenses=marketplace+p.costPrice+packaging+insurance+indirect+skuExpenses+p.otherUnitExpenses;
- const tax=taxes(p,price,buyerPrice,marketplace,comm+l.forward+ads.buyout+crossDock+(p.fulfillment==='FBO'?l.intake:0),expenses);
+ const vatServices=comm+l.forward+ads.buyout+crossDock+(p.fulfillment==='FBO'?l.intake:0);
+ const tax=taxes(p,price,buyerPrice,marketplace,vatServices,expenses,l.quoted?.99*(vatServices+l.reverse):marketplace);
  const expensesBeforeTax=expenses+tax.contributions,totalExpenses=expensesBeforeTax+tax.total,profit=price-totalExpenses;
  const margin=price>0?profit/price*100:0,investment=p.costPrice+crossDock;
  const roi=investment>0?profit/investment*100:null;
  const warnings=[p.commissionPercent>70?'Комиссия выше 70%':'',p.drrPercent>50?'ДРР выше 50%':'',p.buyoutPercent<30?'Выкуп ниже 30%':'',p.costPrice>price?'Себестоимость выше цены':'',profit<0?'Отрицательная прибыль':'',(!p.monthlySales&&(p.monthlyIndirectExpenses||p.monthlySkuExpenses))?'Месячные расходы не распределены: заполните продажи':'',p.insuranceEnabled&&p.fulfillment==='FBO'&&(!p.stockUnits||!p.monthlySales)?'Страхование: заполните остаток и продажи':'',p.taxSystem==='osno'&&!p.vatPercent?'ОСНО: ставка НДС не заполнена':'',p.fulfillment==='FBO'&&p.crossDockEnabled&&p.crossDockTariff===0?'Кросс-докинг включён, подтвердите тариф за литр':''].filter(Boolean);
  const out={sku:p.sku,price,buyerPrice,coinvestAmount:price-buyerPrice,commission:comm,acquiring,forwardLogistics:l.forward,reverseLogistics:l.reverse,returnProcessing:l.processing,returnPackaging:l.returnPackaging,logistics:l.total,intake:l.intake,pvz:l.pvz,crossDock,insurance,advertisingOrder:ads.order,advertising:ads.buyout,incomeTax:tax.incomeTax,vat:tax.vat,tax:tax.total,contributions:tax.contributions,cost:p.costPrice,packaging,indirect,skuExpenses,other:p.otherUnitExpenses,expensesBeforeTax,totalExpenses,profit,margin,roi,...inventory(p,profit,investment),revenueMonth:p.monthlySales&&p.monthlySales>0?price*p.monthlySales:null,warnings,traces:{}} as Result;
+ if(t.observedFbs&&!l.quoted)warnings.push('Для этих условий нет ставки в выгрузке. Логистика оценена по прежней тарифной сетке.');
  const trace=(key:string,formula:string,inputs:Record<string,number|null>)=>out.traces[key]={formula,inputs};
  trace('profit','Цена после скидки − все расходы, включая налоги',{price,totalExpenses,profit});
  trace('margin','Прибыль / цена после скидки × 100',{profit,price,margin});
