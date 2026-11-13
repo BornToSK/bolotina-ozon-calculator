@@ -2,17 +2,29 @@ import type {SavedCalculation} from '../calculation/types';
 import {validateProduct} from '../calculation/validation';
 import {validateTariff} from '../calculation/tariffs';
 export const storageKey='bolotina-calculation-v1';
-export type LocalBaseline=SavedCalculation&{drrUpdate?:{id:string;values:Record<string,number>};appliedDrrUpdate?:string};
+export type LocalBaseline=SavedCalculation&{drrUpdate?:{id:string;values:Record<string,number>};appliedDrrUpdate?:string;catalogRemoval?:{id:string;skus:string[]};appliedCatalogRemoval?:string};
+export function excludeSkus(state:LocalBaseline,skus:Iterable<string>):LocalBaseline {
+ const excluded=new Set(skus);
+ const products=state.products.filter(p=>!excluded.has(p.sku));
+ if(products.length===state.products.length)return state;
+ if(!products.length)throw Error('В расчёте должен остаться хотя бы один товар');
+ const drrUpdate=state.drrUpdate;
+ return {...state,products,...(drrUpdate?{drrUpdate:{...drrUpdate,values:Object.fromEntries(Object.entries(drrUpdate.values).filter(([sku])=>!excluded.has(sku)))}}:{})};
+}
 export function loadLocalBaseline(baseline:LocalBaseline,key:string,storage:Storage):LocalBaseline {
  const raw=storage.getItem(key);
  if(!raw)return baseline.drrUpdate?{...baseline,appliedDrrUpdate:baseline.drrUpdate.id}:baseline;
- const saved=validateSaved(JSON.parse(raw)) as SavedCalculation&{appliedDrrUpdate?:string};
+ const saved=validateSaved(JSON.parse(raw)) as LocalBaseline;
  const update=baseline.drrUpdate;
- if(!update||saved.appliedDrrUpdate===update.id)return saved;
- const next={...saved,appliedDrrUpdate:update.id,products:saved.products.map(p=>Object.hasOwn(update.values,p.sku)?{...p,drrPercent:update.values[p.sku]}:p)};
+ const removal=baseline.catalogRemoval;
+ const applyDrr=!removal&&update&&saved.appliedDrrUpdate!==update.id;
+ const applyRemoval=removal&&saved.appliedCatalogRemoval!==removal.id;
+ if(!applyDrr&&!applyRemoval)return saved;
+ let next=applyDrr?{...saved,appliedDrrUpdate:update.id,products:saved.products.map(p=>Object.hasOwn(update.values,p.sku)?{...p,drrPercent:update.values[p.sku]}:p)}:saved;
+ if(applyRemoval)next={...excludeSkus(next,removal.skus),appliedCatalogRemoval:removal.id};
  validateSaved(next);
  // Keep a copy of the user's calculation before applying the new source rates.
- const backup=key+':before-'+update.id;
+ const backup=key+':before-'+(applyRemoval?removal.id:update!.id);
  if(storage.getItem(backup)===null)storage.setItem(backup,raw);
  storage.setItem(key,JSON.stringify(next));
  return next;
