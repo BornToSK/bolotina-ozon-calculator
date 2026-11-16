@@ -19,9 +19,11 @@ export function loadLocalBaseline(baseline:LocalBaseline,key:string,storage:Stor
  const removal=baseline.catalogRemoval;
  const applyDrr=!removal&&update&&saved.appliedDrrUpdate!==update.id;
  const applyRemoval=removal&&saved.appliedCatalogRemoval!==removal.id;
- if(!applyDrr&&!applyRemoval)return saved;
+ const applyMarks=baseline.markedSkus!==undefined&&saved.markedSkus===undefined;
+ if(!applyDrr&&!applyRemoval)return applyMarks?{...saved,markedSkus:baseline.markedSkus}:saved;
  let next=applyDrr?{...saved,appliedDrrUpdate:update.id,products:saved.products.map(p=>Object.hasOwn(update.values,p.sku)?{...p,drrPercent:update.values[p.sku]}:p)}:saved;
  if(applyRemoval)next={...excludeSkus(next,removal.skus),appliedCatalogRemoval:removal.id};
+ if(applyMarks)next={...next,markedSkus:baseline.markedSkus};
  validateSaved(next);
  // Keep a copy of the user's calculation before applying the new source rates.
  const backup=key+':before-'+(applyRemoval?removal.id:update!.id);
@@ -35,6 +37,7 @@ export function validateSaved(data:unknown):SavedCalculation {
  validateTariff(v.tariff);if(v.tariffVersion!==v.tariff.version)throw Error('Версии тарифа не совпадают');
  for(const p of v.products){const errors=validateProduct(p);if(errors.length)throw Error(`${p.sku}: ${errors.join('; ')}`);}
  if(new Set(v.products.map(p=>p.sku)).size!==v.products.length)throw Error('Дублирующиеся SKU');
+ if(v.markedSkus!==undefined&&(!Array.isArray(v.markedSkus)||v.markedSkus.some(sku=>typeof sku!=='string'||!sku.trim())))throw Error('Неверный список цветных меток');
  if(['targetMargin','maxDrr','yellowMargin'].some(k=>!Object.hasOwn(v.settings,k))||Object.values(v.settings).some(n=>typeof n!=='number'||!Number.isFinite(n)||n<0||n>100)||v.settings.yellowMargin>v.settings.targetMargin)throw Error('Некорректные бизнес-пороги');
  return v;
 }

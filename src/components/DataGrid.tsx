@@ -4,7 +4,7 @@ import type {BusinessSettings,ProductInput,Result} from '../calculation/types';
 import NumberInput from './NumberInput';
 import {fmt,pct,rub} from '../ui';
 import {Copy,ClipboardPaste,Columns3,ArrowDownToLine} from 'lucide-react';
-export type GridRow={p:ProductInput;r:Result};
+export type GridRow={p:ProductInput;r:Result;marked:boolean};
 // Column render callbacks are recreated when inputs change. flexRender treats
 // them as React component types, remounting the editor and losing focus/caret.
 // These callbacks contain no hooks: evaluate them as templates so NumberInput
@@ -16,11 +16,11 @@ function renderCell(cell:Cell<GridRow,unknown>){
 type ColumnLayout={width:number;left:number|undefined;sticky:boolean};
 type BodyRowProps={marginLabel:string;row:Row<GridRow>;selected:Set<string>;settings:BusinessSettings;layout:Map<string,ColumnLayout>;update:(sku:string,field:keyof ProductInput,value:any)=>void};
 const GridBodyRow=memo(function GridBodyRow({row,selected,layout}:BodyRowProps){
- return <tr className={selected.has(row.original.p.sku)?'selected':''}>{row.getVisibleCells().map(cell=>{
+ return <tr className={[selected.has(row.original.p.sku)?'selected':'',row.original.marked?'sku-marked':''].filter(Boolean).join(' ')}>{row.getVisibleCells().map(cell=>{
   const position=layout.get(cell.column.id)!;
   return <td key={cell.id} className={position.sticky?'sticky':''} style={{width:position.width,left:position.left}}>{renderCell(cell)}</td>;
  })}</tr>;
-},(previous,next)=>previous.row.original.p===next.row.original.p&&previous.row.original.r===next.row.original.r&&previous.selected===next.selected&&previous.settings===next.settings&&previous.layout===next.layout&&previous.update===next.update&&previous.marginLabel===next.marginLabel);
+},(previous,next)=>previous.row.original.p===next.row.original.p&&previous.row.original.r===next.row.original.r&&previous.row.original.marked===next.row.original.marked&&previous.selected===next.selected&&previous.settings===next.settings&&previous.layout===next.layout&&previous.update===next.update&&previous.marginLabel===next.marginLabel);
 export function marginClass(m:number,s:BusinessSettings){return m<0?'loss':m<s.yellowMargin?'bad':m<s.targetMargin?'caution':'good';}
 export default function DataGrid({rows,settings,update,selected,setSelected,open,onPaste,onCopy,onFill,onTargetPrice,marginLabel}:{rows:GridRow[];settings:BusinessSettings;update:(sku:string,field:keyof ProductInput,value:any)=>void;selected:Set<string>;setSelected:(s:Set<string>)=>void;open:(sku:string)=>void;onPaste:(text:string)=>void;onCopy:()=>void;onFill:()=>void;onTargetPrice:(sku:string)=>void;marginLabel:string}){
  const [sorting,setSorting]=useState<SortingState>([]),[visibility,setVisibility]=useState({}),[showColumns,setShowColumns]=useState(false);
@@ -29,7 +29,7 @@ export default function DataGrid({rows,settings,update,selected,setSelected,open
  const result=(field:keyof Result,label:string,percent=false):ColumnDef<GridRow>=>({id:field,header:label,size:115,accessorFn:row=>row.r[field],cell:({row})=>{const r=row.original.r,value=r[field] as number|null;return <span className={`metric ${field==='margin'?marginClass(r.margin,settings):field==='profit'?(r.profit>=0?'good':'bad'):''}`} title={r.traces[field]?`Как считается? ${r.traces[field].formula}\n${Object.entries(r.traces[field].inputs).map(([k,v])=>`${k}: ${fmt(v)}`).join('; ')}`:label}>{percent?pct(value):rub(value)}</span>;}});
  return [
  {id:'select',size:44,enableSorting:false,header:()=> <input type="checkbox" aria-label="Выбрать видимые товары" checked={!!rows.length&&rows.every(row=>selected.has(row.p.sku))} onChange={e=>{const n=new Set(selected);rows.forEach(row=>{if(e.target.checked)n.add(row.p.sku);else n.delete(row.p.sku);});setSelected(n);}}/>,cell:({row})=><input type="checkbox" aria-label={`Выбрать ${row.original.p.sku}`} checked={selected.has(row.original.p.sku)} onChange={e=>{const n=new Set(selected);if(e.target.checked)n.add(row.original.p.sku);else n.delete(row.original.p.sku);setSelected(n);}}/>},
- {id:'sku',header:'SKU',size:128,accessorFn:row=>row.p.sku,cell:({row})=><button className="sku-link" onClick={()=>open(row.original.p.sku)}>{row.original.p.sku}</button>},
+ {id:'sku',header:'SKU',size:128,accessorFn:row=>row.p.sku,cell:({row})=><span className="sku-cell">{row.original.marked&&<span className="sku-mark-dot" role="img" aria-label="Артикул из вашего списка" title="Артикул из вашего списка"/>}<button className="sku-link" onClick={()=>open(row.original.p.sku)}>{row.original.p.sku}</button></span>},
  {id:'name',header:'Название',size:180,accessorFn:row=>row.p.name,cell:({row})=><input aria-label={`${row.original.p.sku} Название`} placeholder="Без названия" value={row.original.p.name??''} onChange={e=>update(row.original.p.sku,'name',e.target.value)}/>},
  {id:'fulfillment',header:'Схема',size:84,accessorFn:row=>row.p.fulfillment,cell:({row})=><select aria-label={`${row.original.p.sku} Схема`} value={row.original.p.fulfillment} onChange={e=>update(row.original.p.sku,'fulfillment',e.target.value)}><option>FBS</option><option>FBO</option></select>},
  {...input('sellerPrice','Цена, ₽',112),cell:({row})=>{const {sku,sellerPrice}=row.original.p;return <div className="seller-price-cell"><NumberInput label={`${sku} Цена, ₽`} value={sellerPrice} onChange={n=>update(sku,'sellerPrice',n)}/><button type="button" className="margin-shortcut" aria-label={`${sku} Маржа ${marginLabel}`.trim()} title="Подставить цену под указанную целевую маржу" disabled={!marginLabel} onClick={()=>onTargetPrice(sku)}>Маржа {marginLabel||'—'}</button></div>;}},result('buyerPrice','Цена на витрине'),input('costPrice','Себест., ₽'),input('discountPercent','Скидка, %'),input('coinvestPercent','Соинвест, %'),input('commissionPercent','Комиссия, %'),input('volumeLiters','Объём, л'),input('buyoutPercent','Выкуп, %'),input('drrPercent','ДРР, %'),result('commission','Комиссия, ₽'),result('logistics','Логистика'),result('advertising','Реклама'),result('tax','Налоги'),result('totalExpenses','Все расходы'),result('profit','Прибыль / ед.'),result('margin','Маржа',true),result('roi','ROI',true),input('monthlySales','Продажи / мес.'),result('monthlyProfit','Прибыль / мес.'),input('stockUnits','Остаток, шт.')];

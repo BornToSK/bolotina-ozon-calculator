@@ -36,4 +36,4 @@ export interface Result {
  batchProfit:number|null; annualRoi:number|null; cycleAnnualRoi:number|null;
  warnings:string[]; traces:Record<string,Trace>;
 }
-export interface SavedCalculation {calculatorVersion:'1.0.0'; tariffVersion:string; savedAt:string; name:string; products:ProductInput[]; settings:BusinessSettings; tariff:Tariff}
+export interface SavedCalculation {calculatorVersion:'1.0.0'; tariffVersion:string; savedAt:string; name:string; products:ProductInput[]; settings:BusinessSettings; tariff:Tariff; markedSkus?:string[]}
