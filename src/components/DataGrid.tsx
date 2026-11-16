@@ -35,7 +35,7 @@ export default function DataGrid({rows,settings,update,selected,setSelected,open
  input('sellerPrice','Цена, ₽',112),result('buyerPrice','Цена на витрине'),input('costPrice','Себест., ₽'),input('discountPercent','Скидка, %'),input('coinvestPercent','Соинвест, %'),input('commissionPercent','Комиссия, %'),input('volumeLiters','Объём, л'),input('buyoutPercent','Выкуп, %'),input('drrPercent','ДРР, %'),result('commission','Комиссия, ₽'),result('logistics','Логистика'),result('advertising','Реклама'),result('tax','Налоги'),result('totalExpenses','Все расходы'),result('profit','Прибыль / ед.'),result('margin','Маржа',true),result('roi','ROI',true),input('monthlySales','Продажи / мес.'),result('monthlyProfit','Прибыль / мес.'),input('stockUnits','Остаток, шт.')];
  },[rows,settings,selected,setSelected,update,open]);
  const table=useReactTable({data:rows,columns,getRowId:row=>row.p.sku,state:{sorting,columnVisibility:visibility},onSortingChange:setSorting,onColumnVisibilityChange:setVisibility,getCoreRowModel:getCoreRowModel(),getSortedRowModel:getSortedRowModel(),columnResizeMode:'onChange',defaultColumn:{minSize:65,maxSize:400}});
- const sticky=(id:string)=>['select','sku','name','fulfillment','sellerPrice'].includes(id);
+ const sticky=(id:string)=>['select','sku','name','fulfillment','sellerPrice','buyerPrice'].includes(id);
  const left=(id:string)=>table.getVisibleLeafColumns().filter(c=>sticky(c.id)).slice(0,table.getVisibleLeafColumns().filter(c=>sticky(c.id)).findIndex(c=>c.id===id)).reduce((s,c)=>s+c.getSize(),0);
  let pinnedOffset=0;
  const layoutKey=JSON.stringify(table.getVisibleLeafColumns().map(column=>{
