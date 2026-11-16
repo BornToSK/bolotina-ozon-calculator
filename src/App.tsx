@@ -6,7 +6,7 @@ import {createCachedCalculator} from './calculation/cachedCalculator';
 import {portfolio} from './calculation/portfolio';
 import {defaultTariff,validateTariff} from './calculation/tariffs';
 import {validateProduct} from './calculation/validation';
-import {targetPriceInKopeks} from './calculation/breakEven';
+import {planMarginPrices} from './calculation/breakEven';
 import {speedCodes} from './calculation/ozonCommission';
 import type {ProductInput,SavedCalculation} from './calculation/types';
 import type {ImportPreview} from './io/excel';
@@ -36,6 +36,7 @@ export default function App({baseline}:{baseline?:LocalBaseline}={}){
  const [priceExportOpen,setPriceExportOpen]=useState(false),[referenceOpen,setReferenceOpen]=useState(false);
  const [state,setState]=useState(startingState),[tab,setTab]=useState('products'),[search,setSearch]=useState(''),[filter,setFilter]=useState('all'),[fulfillment,setFulfillment]=useState('all'),[selected,setSelected]=useState(new Set<string>()),[activeSku,setActiveSku]=useState<string|null>(null),[preview,setPreview]=useState<ImportPreview|null>(null),[notice,setNotice]=useState(''),[saved,setSaved]=useState(false),[bulkField,setBulkField]=useState('sellerPrice'),[bulkValue,setBulkValue]=useState(''),[paste,setPaste]=useState(''),[mappingDraft,setMappingDraft]=useState(''),[history,setHistory]=useState<SavedCalculation[]>([]);
  const [exclusionList,setExclusionList]=useState('');
+ const [marginDraft,setMarginDraft]=useState('15'),[marginResult,setMarginResult]=useState<{text:string;unreachable:string[]}|null>(null);
  const drrFileRef=useRef<HTMLInputElement>(null);
  const excelRef=useRef<HTMLInputElement>(null),jsonRef=useRef<HTMLInputElement>(null),tariffRef=useRef<HTMLInputElement>(null);
  const {products,settings,tariff}=state;
@@ -50,16 +51,22 @@ export default function App({baseline}:{baseline?:LocalBaseline}={}){
  const applyLatest=useRef(apply);
  useLayoutEffect(()=>{applyLatest.current=apply;},[apply]);
  const update=useCallback((sku:string,k:keyof ProductInput,v:any)=>applyLatest.current(sku,{[k]:v}),[]);
- const setMargin15=useCallback((sku:string)=>{
-  const product=products.find(p=>p.sku===sku);
-  if(!product)return;
+ const marginTarget=useMemo(()=>{
+  try{const n=numberValue(marginDraft);return n!==null&&n>=0&&n<100?n:null;}catch{return null;}
+ },[marginDraft]);
+ const marginLabel=marginTarget===null?'':fmt(marginTarget,15)+'%';
+ const applyMargin=useCallback((skus:ReadonlySet<string>|null)=>{
+  if(marginTarget===null)return;
   try{
-   const sellerPrice=targetPriceInKopeks(product,tariff,15);
-   if(sellerPrice===null){setNotice(sku+': маржа 15% недостижима при текущих параметрах. Цена не изменена.');return;}
-   applyLatest.current(sku,{sellerPrice});
-   setNotice(sku+': цена '+fmt(sellerPrice,2)+' ₽ для маржи не ниже 15%.');
-  }catch(e){setNotice(sku+': не удалось подобрать цену. '+String(e));}
- },[products,tariff]);
+   const plan=planMarginPrices(products,tariff,marginTarget,skus);
+   if(plan.changed&&!commitProducts(plan.products))return;
+   setMarginResult({text:`Маржа ${marginLabel}. Цены изменены: ${plan.changed}. Уже подходящие цены: ${plan.unchanged}. Не удалось подобрать: ${plan.unreachable.length}.`,unreachable:plan.unreachable});
+  }catch(e){setMarginResult({text:'Не удалось подобрать цены. '+String(e),unreachable:[]});}
+ },[products,tariff,marginTarget,marginLabel,commitProducts]);
+ const applyMarginLatest=useRef(applyMargin);
+ useLayoutEffect(()=>{applyMarginLatest.current=applyMargin;},[applyMargin]);
+ const applySkuMargin=useCallback((sku:string)=>applyMarginLatest.current(new Set([sku])),[]);
+ const undo=()=>{if(history.length){setState(history[history.length-1]);setHistory(h=>h.slice(0,-1));setMarginResult(null);}};
  const bulk=(all=false)=>{try{if(!all&&!selected.size)throw Error('Выберите товары');const next=products.map(p=>{if(!all&&!selected.has(p.sku))return p;if(bulkField==='pricePercent'){const percent=numberValue(bulkValue);if(percent===null)throw Error('Введите процент');return {...p,sellerPrice:p.sellerPrice*(1+percent/100)};}if(bulkField==='fulfillment'){if(!['FBO','FBS'].includes(bulkValue))throw Error('Введите FBO или FBS');return {...p,fulfillment:bulkValue as ProductInput['fulfillment']};}const n=numberValue(bulkValue);if(n===null)throw Error('Введите значение');return {...p,[bulkField]:n};});if(commitProducts(next))setNotice('Обновлено '+(all?products.length:selected.size)+' SKU');}catch(e){setNotice(String(e));}};
  const copy=async()=>{const chosen=rows.filter(row=>!selected.size||selected.has(row.p.sku));const fields=['sku','sellerPrice','costPrice','drrPercent','commissionPercent','buyoutPercent','monthlySales','fulfillment'] as const;const text=[fields.join('\t'),...chosen.map(({p})=>fields.map(k=>p[k]??'').join('\t'))].join('\n');setPaste(text);try{await navigator.clipboard.writeText(text);setNotice(`Скопировано ${chosen.length} строк`);}catch{setNotice('Текст подготовлен в поле Copy / Paste ниже');}};
  const pasteData=(text:string)=>{try{const lines=text.trim().split(/\r?\n/).map(l=>l.split('\t'));if(lines.length<2)throw Error('Вставьте TSV с заголовком: sku, sellerPrice, costPrice, drrPercent…');const keys=lines[0].map(h=>h.trim()),valid=newProduct('');if(!keys.includes('sku'))throw Error('В первой строке нужна колонка sku');const bySku=new Map(products.map(p=>[p.sku,p]));for(const line of lines.slice(1)){const sku=line[keys.indexOf('sku')];const p=bySku.get(sku);if(!p)throw Error(`Неизвестный SKU: ${sku}`);const patch:Record<string,unknown>={};keys.forEach((key,i)=>{if(key==='sku')return;if(!Object.hasOwn(valid,key))throw Error('Неизвестное поле: '+key);const sample=valid[key as keyof ProductInput];patch[key]=typeof sample==='number'||['monthlySales','stockUnits'].includes(key)?numberValue(line[i])??sample:typeof sample==='boolean'?line[i]==='true':line[i];});bySku.set(sku,{...p,...patch});}const next=[...bySku.values()];for(const p of next){const errs=validateProduct(p);if(errs.length)throw Error(errs.join('; '));calculate(p,tariff);}commitProducts(next);setNotice(`Вставлено ${lines.length-1} строк`);}catch(e){setNotice(String(e));}};
@@ -101,8 +108,17 @@ export default function App({baseline}:{baseline?:LocalBaseline}={}){
  {notice&&<div role="alert" className="notice"><span>{notice}</span><button onClick={()=>setNotice('')}>×</button></div>}
  <div className="kpi-grid">{kpis.map(([label,value],i)=><div className={`kpi ${i===1?'highlight':''}`} key={label}><span>{label}</span><strong>{value}</strong><small>{[0,1,3,5,6,7].includes(i)?port.complete?'по продажам магазина':'Не заполнены продажи / мес.':i===8?'по остаткам товаров':'невзвешенно по SKU'}</small></div>)}</div>
  {tab==='products'&&<><div className="section-heading"><div><h2>Ассортимент <span>{products.length}</span></h2><p>Цена, расходы и прибыль — в одном рабочем расчёте</p></div><button onClick={add}><Plus size={16}/>Добавить SKU</button></div><div className="toolbar"><label className="search"><Search size={17}/><input placeholder="Поиск по SKU или названию" value={search} onChange={e=>setSearch(e.target.value)}/></label><select aria-label="Фильтр проблемных SKU" value={filter} onChange={e=>setFilter(e.target.value)}><option value="all">Все товары</option><option value="loss">Убыточные</option><option value="target">Маржа ниже {settings.targetMargin}%</option><option value="drr">ДРР выше {settings.maxDrr}%</option><option value="warnings">Предупреждения</option></select><select aria-label="Фильтр схемы" value={fulfillment} onChange={e=>setFulfillment(e.target.value)}><option value="all">FBS + FBO</option><option>FBS</option><option>FBO</option></select><span className="legend"><i className="good-dot"/>≥ {settings.targetMargin}%<i className="yellow-dot"/>≥ {settings.yellowMargin}%<i className="red-dot"/>&lt; {settings.yellowMargin}%</span></div>
- <DataGrid onMargin15={setMargin15} rows={rows} settings={settings} update={update} selected={selected} setSelected={setSelected} open={open} onPaste={pasteData} onCopy={()=>void copy()} onFill={fill}/>
- <div className="bulk-panel"><div><strong>Массовое редактирование</strong><small>Выбрано {selected.size} SKU. Fill down копирует поле из первой видимой выбранной строки.</small></div><select aria-label="Поле массового изменения" value={bulkField} onChange={e=>setBulkField(e.target.value)}>{[['sellerPrice','Цена, ₽'],['pricePercent','Изменение цены, %'],['drrPercent','ДРР, %'],['commissionPercent','Комиссия, %'],['coinvestPercent','Соинвест, %'],['buyoutPercent','Выкуп, %'],['costPrice','Себестоимость, ₽'],['monthlySales','Продажи / мес.'],['stockUnits','Остаток'],['fulfillment','Схема FBO / FBS']].map(([v,l])=><option key={v} value={v}>{l}</option>)}</select><input aria-label="Значение массового изменения" placeholder={bulkField==='fulfillment'?'FBO или FBS':'Значение'} value={bulkValue} onChange={e=>setBulkValue(e.target.value)}/><button className="primary" onClick={()=>bulk()} disabled={!selected.size}>Применить выбранным</button><button onClick={()=>bulk(true)} disabled={!products.length}>Применить всем ({products.length})</button><button disabled={!history.length} onClick={()=>{setState(history[history.length-1]);setHistory(h=>h.slice(0,-1));}}>Отменить</button></div>
+ <div className="bulk-panel margin-panel">
+  <div><strong>Цены по марже</strong><small>Меняется цена продавца с учётом текущих расходов и ДРР. «Всем» включает товары вне фильтра.</small></div>
+  <label>Целевая маржа, %<input aria-label="Целевая маржа для цены, %" inputMode="decimal" aria-invalid={marginTarget===null} value={marginDraft} onChange={e=>{setMarginDraft(e.target.value);setMarginResult(null);}}/></label>
+  <button className="primary" type="button" disabled={marginTarget===null||!selected.size} onClick={()=>applyMargin(selected)}>Цены выбранным ({selected.size})</button>
+  <button type="button" disabled={marginTarget===null||!products.length} onClick={()=>applyMargin(null)}>Цены всем ({products.length})</button>
+  <button type="button" disabled={!history.length} onClick={undo}>Отменить последнее действие</button>
+  {marginTarget===null&&<p className="margin-feedback bad">Введите маржу от 0% до значения меньше 100%.</p>}
+  {marginResult&&<div className="margin-feedback"><p role="status">{marginResult.text}</p>{marginResult.unreachable.length>0&&<details><summary>Товары без новой цены</summary><p>{marginResult.unreachable.join(', ')}</p></details>}</div>}
+ </div>
+ <DataGrid onTargetPrice={applySkuMargin} marginLabel={marginLabel} rows={rows} settings={settings} update={update} selected={selected} setSelected={setSelected} open={open} onPaste={pasteData} onCopy={()=>void copy()} onFill={fill}/>
+ <div className="bulk-panel"><div><strong>Массовое редактирование</strong><small>Выбрано {selected.size} SKU. Fill down копирует поле из первой видимой выбранной строки.</small></div><select aria-label="Поле массового изменения" value={bulkField} onChange={e=>setBulkField(e.target.value)}>{[['sellerPrice','Цена, ₽'],['pricePercent','Изменение цены, %'],['drrPercent','ДРР, %'],['commissionPercent','Комиссия, %'],['coinvestPercent','Соинвест, %'],['buyoutPercent','Выкуп, %'],['costPrice','Себестоимость, ₽'],['monthlySales','Продажи / мес.'],['stockUnits','Остаток'],['fulfillment','Схема FBO / FBS']].map(([v,l])=><option key={v} value={v}>{l}</option>)}</select><input aria-label="Значение массового изменения" placeholder={bulkField==='fulfillment'?'FBO или FBS':'Значение'} value={bulkValue} onChange={e=>setBulkValue(e.target.value)}/><button className="primary" onClick={()=>bulk()} disabled={!selected.size}>Применить выбранным</button><button onClick={()=>bulk(true)} disabled={!products.length}>Применить всем ({products.length})</button><button disabled={!history.length} onClick={undo}>Отменить</button></div>
  {baseline&&products.length>0&&<details className="panel paste-panel"><summary>Исключить артикулы из расчёта</summary><p>Вставьте по одному артикулу на строку. Перед исключением сохраняется копия расчёта в браузере. Действие можно отменить.</p><textarea aria-label="Артикулы для исключения" value={exclusionList} onChange={e=>setExclusionList(e.target.value)}/><button onClick={exclude} disabled={!exclusionCount||exclusionCount===products.length}>Исключить {exclusionCount} SKU</button>{exclusionCount<exclusionSet.size&&<p>Не найдено: {exclusionSet.size-exclusionCount}</p>}</details>}
  <details className="panel paste-panel"><summary>Copy / Paste из Excel</summary><p className="muted">TSV с заголовками полей: sku, sellerPrice, costPrice, drrPercent, commissionPercent, buyoutPercent, monthlySales, fulfillment. SKU сопоставляются точно. Copy готовит этот формат.</p><textarea id="paste-panel" aria-label="Табличные данные TSV" value={paste} onChange={e=>setPaste(e.target.value)} placeholder={'sku\tsellerPrice\tdrrPercent\nLP-25\t1697\t13'}/><button onClick={()=>pasteData(paste)}>Вставить данные</button></details></>}
  {tab==='analytics'&&<Analytics products={products} results={results} settings={settings} open={open}/>}{tab==='pnl'&&<Pnl products={products} results={results}/>}{tab==='scenarios'&&<Scenarios products={products} tariff={tariff}/>}

@@ -24,6 +24,20 @@ export function targetPriceInKopeks(p:ProductInput,t:Tariff,target:number):numbe
  }
  return null;
 }
+export function planMarginPrices(products:ProductInput[],t:Tariff,target:number,skus:ReadonlySet<string>|null){
+ if(!Number.isFinite(target)||target<0||target>=100)throw Error('Введите маржу от 0% до значения меньше 100%');
+ const unreachable:string[]=[];
+ let changed=0,unchanged=0;
+ const next=products.map(p=>{
+  if(skus&&!skus.has(p.sku))return p;
+  const sellerPrice=targetPriceInKopeks(p,t,target);
+  if(sellerPrice===null){unreachable.push(p.sku);return p;}
+  if(sellerPrice===p.sellerPrice){unchanged++;return p;}
+  changed++;
+  return {...p,sellerPrice};
+ });
+ return {products:next,changed,unchanged,unreachable};
+}
 export function maxDrr(p:ProductInput,t:Tariff,target=0):number|null {
  const f=(drr:number)=>{const r=calculate({...p,drrPercent:drr},t);return r.profit-r.price*target/100;};
  if(f(0)<0)return null;if(f(100)>=0)return 100;return bisect(f,0,100,false);
