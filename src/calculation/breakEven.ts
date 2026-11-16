@@ -7,9 +7,22 @@ function bisect(fn:(x:number)=>number,lo:number,hi:number,increasing:boolean){
 export function targetPrice(p:ProductInput,t:Tariff,target=0,min=0,max=1e7):number|null {
  const f=(price:number)=>{const r=calculate({...p,sellerPrice:price},t);return r.profit-r.price*target/100;};
  const discount=1-p.discountPercent/100;if(discount<=0)return null;
- const boundaries=[min,100/discount,300/discount,t.additionalFees.pvzCap/(Math.max(p.pvzPercent,.000001)/100)/discount,max].filter(n=>n>=min&&n<=max).sort((a,b)=>a-b);
- for(let i=0;i<boundaries.length-1;i++){const lo=boundaries[i]+(i?1e-7:0),hi=boundaries[i+1];if(f(lo)>=0)return lo;if(f(hi)>=0)return bisect(f,lo,hi,true);}
+ const boundaries=[...new Set([min,100/discount,300/discount,(t.observedFbs?.minimumExclusive??300)/discount,t.additionalFees.pvzCap/(Math.max(p.pvzPercent,.000001)/100)/discount,max].filter(n=>n>=min&&n<=max))].sort((a,b)=>a-b);
+ for(let i=0;i<boundaries.length-1;i++){const lo=boundaries[i]+(i?1e-7:0),hi=boundaries[i+1];if(lo>hi)continue;if(f(lo)>=0)return lo;if(f(hi)>=0)return bisect(f,lo,hi,true);}
  return f(max)>=0?max:null;
+}
+export function targetPriceInKopeks(p:ProductInput,t:Tariff,target:number):number|null {
+ let min=.01;
+ // Rounding up can cross a tariff threshold. Check the exact amount that will be saved.
+ for(let attempt=0;attempt<8&&min<=1e7;attempt++){
+  const price=targetPrice(p,t,target,min);
+  if(price===null)return null;
+  const cents=Math.ceil(price*100);
+  const rounded=cents/100;
+  if(calculate({...p,sellerPrice:rounded},t).margin>=target)return rounded;
+  min=(cents+1)/100;
+ }
+ return null;
 }
 export function maxDrr(p:ProductInput,t:Tariff,target=0):number|null {
  const f=(drr:number)=>{const r=calculate({...p,drrPercent:drr},t);return r.profit-r.price*target/100;};
